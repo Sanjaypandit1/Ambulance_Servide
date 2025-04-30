@@ -375,19 +375,20 @@ const LoginSelectionScreen = () => {
 const styles = StyleSheet.create({
   scrollContainer: {
     flexGrow: 1,
+    backgroundColor: "#ffebee", // Light red background
   },
   container: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
     padding: 20,
-    backgroundColor: "#fff",
+    backgroundColor: "#ffebee", // Light red background
   },
   title: {
     fontSize: 32,
     fontWeight: "bold",
     marginBottom: 40,
-    color: "#e74c3c",
+    color: "#d50000", // Deep red color
   },
   image: {
     width: 200,
@@ -396,35 +397,35 @@ const styles = StyleSheet.create({
   },
   photoText: {
     fontSize: 16,
-    color: "#7f8c8d",
+    color: "#b71c1c", // Dark red color
     marginBottom: 40,
   },
   formTitle: {
     fontSize: 24,
     fontWeight: "bold",
     marginBottom: 20,
-    color: "#2c3e50",
+    color: "#c62828", // Medium red color
   },
   input: {
     width: "100%",
     height: 50,
     borderWidth: 1,
-    borderColor: "#ddd",
+    borderColor: "#ef9a9a", // Light red border
     borderRadius: 8,
     marginBottom: 15,
     paddingHorizontal: 15,
-    backgroundColor: "#f9f9f9",
+    backgroundColor: "#fff", // White background for better readability
   },
   inputLabel: {
     fontSize: 14,
     fontWeight: "500",
     marginBottom: 5,
-    color: "#2c3e50",
+    color: "#b71c1c", // Dark red color
   },
   button: {
     width: "100%",
     padding: 15,
-    backgroundColor: "#3498db",
+    backgroundColor: "#d50000", // Deep red color
     borderRadius: 8,
     marginBottom: 15,
     alignItems: "center",
@@ -438,28 +439,30 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   switchButtonText: {
-    color: "#3498db",
+    color: "#c62828", // Medium red color
     fontSize: 16,
   },
   backButton: {
     marginTop: 10,
   },
   backButtonText: {
-    color: "#7f8c8d",
+    color: "#b71c1c", // Dark red color
     fontSize: 16,
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.5)",
+    backgroundColor: "rgba(183, 28, 28, 0.5)", // Semi-transparent red
     justifyContent: "center",
     alignItems: "center",
   },
   modalContainer: {
     width: "90%",
-    backgroundColor: "#fff",
+    backgroundColor: "#ffebee", // Light red background
     borderRadius: 10,
     padding: 20,
     maxHeight: "80%",
+    borderWidth: 1,
+    borderColor: "#ef9a9a", // Light red border
   },
   modalHeader: {
     flexDirection: "row",
@@ -470,7 +473,7 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 20,
     fontWeight: "bold",
-    color: "#2c3e50",
+    color: "#c62828", // Medium red color
   },
   closeButton: {
     padding: 5,
@@ -488,20 +491,21 @@ const styles = StyleSheet.create({
     padding: 12,
     alignItems: "center",
     borderWidth: 1,
-    borderColor: "#ddd",
+    borderColor: "#ef9a9a", // Light red border
     marginHorizontal: 5,
     borderRadius: 8,
   },
   genderSelected: {
-    backgroundColor: "#3498db",
-    borderColor: "#3498db",
+    backgroundColor: "#d50000", // Deep red color
+    borderColor: "#d50000", // Deep red color
   },
   genderText: {
-    color: "#2c3e50",
+    color: "#b71c1c", // Dark red color
   },
   genderTextSelected: {
-    color: "#fff",
+    color: "#fff", // White text for selected option
   },
 })
+
 
 export default LoginSelectionScreen
