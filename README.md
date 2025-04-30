@@ -34,13 +34,14 @@ npm install
 
 ```sh
 npx react-nativr run-android
+```
 
-⚡ Usage
+## ⚡ Usage
 Open App.tsx and start modifying your code
 
 Save to auto-reload using Fast Refresh
 
-🔄 Force Reload
+## 🔄 Force Reload
 Android: Press <kbd>R</kbd> twice or use <kbd>Ctrl/Cmd</kbd> + <kbd>M</kbd>
 
 iOS: Press <kbd>Cmd</kbd> + <kbd>R</kbd>
