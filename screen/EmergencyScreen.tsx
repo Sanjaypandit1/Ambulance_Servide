@@ -3,11 +3,39 @@ import React, { useState, useEffect } from 'react'
 import Icon from 'react-native-vector-icons/MaterialIcons'
 import Geolocation from 'react-native-geolocation-service'
 import { request, PERMISSIONS, RESULTS } from 'react-native-permissions'
+import AsyncStorage from '@react-native-async-storage/async-storage'
+import { useNavigation } from '@react-navigation/native'
+import { StackNavigationProp } from '@react-navigation/stack'
+
+// Define your root stack param list
+type RootStackParamList = {
+  Emergency: undefined;
+  Track: { emergencyData: EmergencyData };
+  Home: undefined;
+};
+
+// Define the EmergencyData type
+type EmergencyData = {
+  id: string;
+  type: string;
+  location: string;
+  coordinates: {
+    latitude: number | null;
+    longitude: number | null;
+  };
+  additionalInfo: string;
+  timestamp: number;
+  status: string;
+};
+
+// Create a type for the navigation prop specific to this screen
+type EmergencyScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Emergency'>;
 
 const EmergencyScreen = () => {
+  const navigation = useNavigation<EmergencyScreenNavigationProp>()
   const [location, setLocation] = useState('Current Location')
   const [emergencyType, setEmergencyType] = useState('')
-  // Fix Error 1 & 2: Define proper types for coordinates
+  const [additionalInfo, setAdditionalInfo] = useState('')
   const [coordinates, setCoordinates] = useState<{
     latitude: number | null;
     longitude: number | null;
@@ -72,7 +100,7 @@ const EmergencyScreen = () => {
     )
   }
 
-  // Fix Error 3 & 4: Add explicit type annotations for parameters
+  // Fetch address from coordinates using OpenStreetMap's Nominatim
   const fetchAddressFromNominatim = async (latitude: number, longitude: number) => {
     try {
       // Add a small delay to avoid rate limiting (Nominatim has a 1 request per second limit)
@@ -105,11 +133,61 @@ const EmergencyScreen = () => {
     }
   }
 
+  // Handle ambulance request
+  const handleRequestAmbulance = async () => {
+    if (!emergencyType) {
+      Alert.alert('Error', 'Please select an emergency type')
+      return
+    }
+
+    if (location === 'Current Location' && !coordinates.latitude) {
+      Alert.alert('Error', 'Unable to determine your location. Please try again.')
+      return
+    }
+
+    // Create emergency request data
+    const requestData: EmergencyData = {
+      id: Date.now().toString(),
+      type: emergencyType,
+      location: location,
+      coordinates: coordinates,
+      additionalInfo: additionalInfo,
+      timestamp: Date.now(),
+      status: 'In Progress'
+    }
+
+    try {
+      // Save to recent activities
+      const storedActivities = await AsyncStorage.getItem('recentActivities')
+      let activities = storedActivities ? JSON.parse(storedActivities) : []
+      
+      // Add new activity at the beginning
+      activities = [requestData, ...activities].slice(0, 10) // Keep only 10 most recent
+      
+      await AsyncStorage.setItem('recentActivities', JSON.stringify(activities))
+      
+      // Save to active emergencies
+      const storedEmergencies = await AsyncStorage.getItem('activeEmergencies')
+      let emergencies = storedEmergencies ? JSON.parse(storedEmergencies) : []
+      
+      // Add new emergency
+      emergencies = [requestData, ...emergencies]
+      
+      await AsyncStorage.setItem('activeEmergencies', JSON.stringify(emergencies))
+      
+      // Navigate to track screen with data
+      navigation.navigate('Track', { emergencyData: requestData })
+    } catch (error) {
+      console.log('Error saving emergency request:', error)
+      Alert.alert('Error', 'Failed to process your request. Please try again.')
+    }
+  }
+
   // Initialize location on component mount
   useEffect(() => {
     requestLocationPermission()
   }, [])
-
+  
   return (
     <View style={styles.container}>
       <View style={styles.header}>
@@ -150,7 +228,6 @@ const EmergencyScreen = () => {
               />
             </TouchableOpacity>
           </View>
-          {/* Fix Error 5 & 6: Add null checks before using toFixed */}
           {coordinates.latitude !== null && coordinates.longitude !== null && (
             <Text style={styles.coordinatesText}>
               Coordinates: {coordinates.latitude.toFixed(6)}, {coordinates.longitude.toFixed(6)}
@@ -197,11 +274,16 @@ const EmergencyScreen = () => {
             placeholder="Describe your emergency situation..."
             multiline
             numberOfLines={4}
+            value={additionalInfo}
+            onChangeText={setAdditionalInfo}
           />
         </View>
 
         {/* Request Ambulance Button */}
-        <TouchableOpacity style={styles.requestButton}>
+        <TouchableOpacity 
+          style={styles.requestButton}
+          onPress={handleRequestAmbulance}
+        >
           <Text style={styles.requestButtonText}>REQUEST AMBULANCE</Text>
         </TouchableOpacity>
 
