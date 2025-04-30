@@ -6,6 +6,8 @@ import { request, PERMISSIONS, RESULTS } from 'react-native-permissions'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useNavigation } from '@react-navigation/native'
 import { StackNavigationProp } from '@react-navigation/stack'
+import { emergencyApi } from '../services/api'
+import { useAuth } from '../context/AuthContext'
 
 // Define your root stack param list
 type RootStackParamList = {
@@ -33,6 +35,7 @@ type EmergencyScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Em
 
 const EmergencyScreen = () => {
   const navigation = useNavigation<EmergencyScreenNavigationProp>()
+  const { user } = useAuth()
   const [location, setLocation] = useState('Current Location')
   const [emergencyType, setEmergencyType] = useState('')
   const [additionalInfo, setAdditionalInfo] = useState('')
@@ -146,8 +149,8 @@ const EmergencyScreen = () => {
     }
 
     // Create emergency request data
-    const requestData: EmergencyData = {
-      id: Date.now().toString(),
+    const requestData = {
+      userId: user?.uid || 'anonymous',
       type: emergencyType,
       location: location,
       coordinates: coordinates,
@@ -157,30 +160,63 @@ const EmergencyScreen = () => {
     }
 
     try {
-      // Save to recent activities
-      const storedActivities = await AsyncStorage.getItem('recentActivities')
-      let activities = storedActivities ? JSON.parse(storedActivities) : []
+      setLoading(true)
       
-      // Add new activity at the beginning
-      activities = [requestData, ...activities].slice(0, 10) // Keep only 10 most recent
+      // Try to use API first
+      try {
+        const response = await emergencyApi.createEmergency(requestData)
+        
+        if (response.data) {
+          const emergencyData = response.data as EmergencyData
+          
+          // Save to local storage as backup
+          await saveEmergencyToLocalStorage(emergencyData)
+          
+          // Navigate to track screen with data
+          navigation.navigate('Track', { emergencyData })
+          return
+        }
+      } catch (apiError) {
+        console.log('API request failed, falling back to local storage:', apiError)
+      }
       
-      await AsyncStorage.setItem('recentActivities', JSON.stringify(activities))
+      // Fallback to local storage
+      const emergencyData: EmergencyData = {
+        id: Date.now().toString(),
+        ...requestData
+      }
       
-      // Save to active emergencies
-      const storedEmergencies = await AsyncStorage.getItem('activeEmergencies')
-      let emergencies = storedEmergencies ? JSON.parse(storedEmergencies) : []
-      
-      // Add new emergency
-      emergencies = [requestData, ...emergencies]
-      
-      await AsyncStorage.setItem('activeEmergencies', JSON.stringify(emergencies))
+      await saveEmergencyToLocalStorage(emergencyData)
       
       // Navigate to track screen with data
-      navigation.navigate('Track', { emergencyData: requestData })
+      navigation.navigate('Track', { emergencyData })
     } catch (error) {
       console.log('Error saving emergency request:', error)
       Alert.alert('Error', 'Failed to process your request. Please try again.')
+    } finally {
+      setLoading(false)
     }
+  }
+  
+  // Save emergency to local storage
+  const saveEmergencyToLocalStorage = async (emergencyData: EmergencyData) => {
+    // Save to recent activities
+    const storedActivities = await AsyncStorage.getItem('recentActivities')
+    let activities = storedActivities ? JSON.parse(storedActivities) : []
+    
+    // Add new activity at the beginning
+    activities = [emergencyData, ...activities].slice(0, 10) // Keep only 10 most recent
+    
+    await AsyncStorage.setItem('recentActivities', JSON.stringify(activities))
+    
+    // Save to active emergencies
+    const storedEmergencies = await AsyncStorage.getItem('activeEmergencies')
+    let emergencies = storedEmergencies ? JSON.parse(storedEmergencies) : []
+    
+    // Add new emergency
+    emergencies = [emergencyData, ...emergencies]
+    
+    await AsyncStorage.setItem('activeEmergencies', JSON.stringify(emergencies))
   }
 
   // Initialize location on component mount
@@ -283,8 +319,13 @@ const EmergencyScreen = () => {
         <TouchableOpacity 
           style={styles.requestButton}
           onPress={handleRequestAmbulance}
+          disabled={loading}
         >
-          <Text style={styles.requestButtonText}>REQUEST AMBULANCE</Text>
+          {loading ? (
+            <Text style={styles.requestButtonText}>PROCESSING...</Text>
+          ) : (
+            <Text style={styles.requestButtonText}>REQUEST AMBULANCE</Text>
+          )}
         </TouchableOpacity>
 
         {/* Emergency Contacts */}

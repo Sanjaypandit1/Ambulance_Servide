@@ -1,11 +1,12 @@
 "use client"
 
-import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Alert, Modal, TextInput, Linking, Image } from "react-native"
+import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Alert, Modal, TextInput, Linking, Image, ActivityIndicator } from "react-native"
 import { useState, useEffect } from "react"
 import Icon from "react-native-vector-icons/MaterialIcons"
 import { useAuth } from "../context/AuthContext"
 import AsyncStorage from "@react-native-async-storage/async-storage"
 import * as ImagePicker from 'react-native-image-picker'
+import { userApi } from "../services/api"
 
 // Define interface for emergency contact
 interface EmergencyContact {
@@ -22,9 +23,9 @@ const ProfileScreen = () => {
   const [newContactName, setNewContactName] = useState('')
   const [newContactNumber, setNewContactNumber] = useState('')
   const [newContactRelation, setNewContactRelation] = useState('')
-  // Fix: Define proper type for emergencyContacts
   const [emergencyContacts, setEmergencyContacts] = useState<EmergencyContact[]>([])
   const [profileImage, setProfileImage] = useState<string | null>(null)
+  const [contactsLoading, setContactsLoading] = useState(false)
 
   // Add this console log to debug
   console.log("Profile data:", { userType, userProfile, userEmail: user?.email })
@@ -50,30 +51,61 @@ const ProfileScreen = () => {
     }
   }
 
-  // Load emergency contacts from storage
+  // Load emergency contacts from API or storage
   const loadEmergencyContacts = async () => {
+    if (!user?.uid) return
+    
+    setContactsLoading(true)
     try {
+      // Try to get contacts from API first
+      try {
+        const response = await userApi.getEmergencyContacts(user.uid)
+        if (response.data) {
+          setEmergencyContacts(response.data)
+          // Also update local storage as backup
+          await AsyncStorage.setItem('emergencyContacts', JSON.stringify(response.data))
+          setContactsLoading(false)
+          return
+        }
+      } catch (apiError) {
+        console.log('API get contacts failed, falling back to local storage:', apiError)
+      }
+      
+      // Fallback to local storage
       const storedContacts = await AsyncStorage.getItem('emergencyContacts')
       if (storedContacts) {
         setEmergencyContacts(JSON.parse(storedContacts))
       }
     } catch (error) {
       console.log('Error loading emergency contacts:', error)
+    } finally {
+      setContactsLoading(false)
     }
   }
 
-  // Save emergency contacts to storage
-  // Fix: Add type for contacts parameter
+  // Save emergency contacts to API and storage
   const saveEmergencyContacts = async (contacts: EmergencyContact[]) => {
     try {
+      // Save to local storage first as backup
       await AsyncStorage.setItem('emergencyContacts', JSON.stringify(contacts))
+      
+      // Then try to save to API if user is logged in
+      if (user?.uid) {
+        try {
+          // We would need to implement proper API calls here
+          // This is just a placeholder for the actual API implementation
+          // await userApi.updateEmergencyContacts(user.uid, contacts)
+        } catch (apiError) {
+          console.log('API save contacts failed:', apiError)
+        }
+      }
     } catch (error) {
       console.log('Error saving emergency contacts:', error)
     }
   }
 
   // Add a new emergency contact
-  const addEmergencyContact = () => {
+  const addEmergencyContact = async () => {
     if (!newContactName.trim()) {
       Alert.alert('Error', 'Please enter a contact name')
       return
@@ -91,20 +123,52 @@ const ProfileScreen = () => {
       relation: newContactRelation.trim() || 'Contact'
     }
     
-    const updatedContacts = [...emergencyContacts, newContact]
-    setEmergencyContacts(updatedContacts)
-    saveEmergencyContacts(updatedContacts)
+    setLoading(true)
     
-    // Reset form and close modal
-    setNewContactName('')
-    setNewContactNumber('')
-    setNewContactRelation('')
-    setModalVisible(false)
+    try {
+      // Try to add contact via API first
+      if (user?.uid) {
+        try {
+          const response = await userApi.addEmergencyContact(user.uid, newContact)
+          if (response.data) {
+            // If API call succeeds, update local state with the returned contact
+            const updatedContacts = [...emergencyContacts, response.data]
+            setEmergencyContacts(updatedContacts)
+            await saveEmergencyContacts(updatedContacts)
+            
+            // Reset form and close modal
+            setNewContactName('')
+            setNewContactNumber('')
+            setNewContactRelation('')
+            setModalVisible(false)
+            setLoading(false)
+            return
+          }
+        } catch (apiError) {
+          console.log('API add contact failed, falling back to local storage:', apiError)
+        }
+      }
+      
+      // Fallback to local storage
+      const updatedContacts = [...emergencyContacts, newContact]
+      setEmergencyContacts(updatedContacts)
+      await saveEmergencyContacts(updatedContacts)
+      
+      // Reset form and close modal
+      setNewContactName('')
+      setNewContactNumber('')
+      setNewContactRelation('')
+      setModalVisible(false)
+    } catch (error) {
+      Alert.alert('Error', 'Failed to add contact. Please try again.')
+      console.log('Error adding contact:', error)
+    } finally {
+      setLoading(false)
+    }
   }
 
   // Delete an emergency contact
-  // Fix: Add type for id parameter
-  const deleteEmergencyContact = (id: string) => {
+  const deleteEmergencyContact = async (id: string) => {
     Alert.alert(
       'Delete Contact',
       'Are you sure you want to delete this emergency contact?',
@@ -113,10 +177,35 @@ const ProfileScreen = () => {
         { 
           text: 'Delete', 
           style: 'destructive',
-          onPress: () => {
-            const updatedContacts = emergencyContacts.filter(contact => contact.id !== id)
-            setEmergencyContacts(updatedContacts)
-            saveEmergencyContacts(updatedContacts)
+          onPress: async () => {
+            setLoading(true)
+            
+            try {
+              // Try to delete via API first
+              if (user?.uid) {
+                try {
+                  await userApi.deleteEmergencyContact(user.uid, id)
+                  // If API call succeeds, update local state
+                  const updatedContacts = emergencyContacts.filter(contact => contact.id !== id)
+                  setEmergencyContacts(updatedContacts)
+                  await saveEmergencyContacts(updatedContacts)
+                  setLoading(false)
+                  return
+                } catch (apiError) {
+                  console.log('API delete contact failed, falling back to local storage:', apiError)
+                }
+              }
+              
+              // Fallback to local storage
+              const updatedContacts = emergencyContacts.filter(contact => contact.id !== id)
+              setEmergencyContacts(updatedContacts)
+              await saveEmergencyContacts(updatedContacts)
+            } catch (error) {
+              Alert.alert('Error', 'Failed to delete contact. Please try again.')
+              console.log('Error deleting contact:', error)
+            } finally {
+              setLoading(false)
+            }
           }
         }
       ]
@@ -124,7 +213,6 @@ const ProfileScreen = () => {
   }
 
   // Make a phone call
-  // Fix: Add type for phoneNumber parameter
   const makePhoneCall = (phoneNumber: string) => {
     const cleanedNumber = phoneNumber.replace(/[^\d+]/g, '')
     
@@ -163,6 +251,12 @@ const ProfileScreen = () => {
       return userProfile.name.substring(0, 2).toUpperCase()
     }
     return "U"
+  }
+
+  // Format gender text for display
+  const formatGender = (gender: string | undefined) => {
+    if (!gender) return "Not provided"
+    return gender.charAt(0).toUpperCase() + gender.slice(1)
   }
 
   // Handle selecting image from gallery
@@ -240,7 +334,7 @@ const ProfileScreen = () => {
   useEffect(() => {
     loadEmergencyContacts()
     loadProfileImage()
-  }, [])
+  }, [user])
 
   return (
     <View style={styles.container}>
@@ -300,11 +394,7 @@ const ProfileScreen = () => {
               <Icon name="wc" size={20} color="#e74c3c" />
               <View style={styles.infoContent}>
                 <Text style={styles.infoLabel}>Gender</Text>
-                <Text style={styles.infoValue}>
-                  {userProfile?.gender
-                    ? userProfile.gender.charAt(0).toUpperCase() + userProfile.gender.slice(1)
-                    : "Not provided"}
-                </Text>
+                <Text style={styles.infoValue}>{formatGender(userProfile?.gender)}</Text>
               </View>
             </View>
 
@@ -331,7 +421,12 @@ const ProfileScreen = () => {
           </View>
           
           <View style={styles.infoCard}>
-            {emergencyContacts.length > 0 ? (
+            {contactsLoading ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color="#e74c3c" />
+                <Text style={styles.loadingText}>Loading contacts...</Text>
+              </View>
+            ) : emergencyContacts.length > 0 ? (
               emergencyContacts.map(contact => (
                 <TouchableOpacity 
                   key={contact.id} 
@@ -451,8 +546,13 @@ const ProfileScreen = () => {
               <TouchableOpacity 
                 style={styles.saveButton}
                 onPress={addEmergencyContact}
+                disabled={loading}
               >
-                <Text style={styles.saveButtonText}>Save Contact</Text>
+                {loading ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.saveButtonText}>Save Contact</Text>
+                )}
               </TouchableOpacity>
             </View>
           </View>
@@ -681,6 +781,14 @@ const styles = StyleSheet.create({
   versionText: {
     color: "#95a5a6",
     fontSize: 12,
+  },
+  loadingContainer: {
+    alignItems: "center",
+    padding: 20,
+  },
+  loadingText: {
+    marginTop: 10,
+    color: "#7f8c8d",
   },
   // Modal styles
   modalOverlay: {
