@@ -1,10 +1,21 @@
-import { StyleSheet, Text, View, TouchableOpacity, ScrollView, TextInput } from 'react-native'
-import React, { useState } from 'react'
+import { StyleSheet, Text, View, TouchableOpacity, ScrollView, TextInput, Alert, Platform } from 'react-native'
+import React, { useState, useEffect } from 'react'
 import Icon from 'react-native-vector-icons/MaterialIcons'
+import Geolocation from 'react-native-geolocation-service'
+import { request, PERMISSIONS, RESULTS } from 'react-native-permissions'
 
 const EmergencyScreen = () => {
   const [location, setLocation] = useState('Current Location')
   const [emergencyType, setEmergencyType] = useState('')
+  // Fix Error 1 & 2: Define proper types for coordinates
+  const [coordinates, setCoordinates] = useState<{
+    latitude: number | null;
+    longitude: number | null;
+  }>({
+    latitude: null,
+    longitude: null,
+  })
+  const [loading, setLoading] = useState(false)
 
   const emergencyTypes = [
     { id: 1, name: 'Medical', icon: 'medical-services' },
@@ -12,6 +23,92 @@ const EmergencyScreen = () => {
     { id: 3, name: 'Fire', icon: 'local-fire-department' },
     { id: 4, name: 'Police', icon: 'local-police' },
   ]
+
+  // Request location permission
+  const requestLocationPermission = async () => {
+    try {
+      const result = await request(
+        Platform.OS === 'ios' 
+          ? PERMISSIONS.IOS.LOCATION_WHEN_IN_USE 
+          : PERMISSIONS.ANDROID.ACCESS_FINE_LOCATION
+      )
+      
+      if (result === RESULTS.GRANTED) {
+        getCurrentLocation()
+      } else {
+        Alert.alert(
+          'Permission Denied',
+          'Location permission is required to get your current location',
+          [{ text: 'OK' }]
+        )
+      }
+    } catch (error) {
+      console.log('Error requesting location permission:', error)
+    }
+  }
+
+  // Get current location using device GPS
+  const getCurrentLocation = () => {
+    setLoading(true)
+    
+    Geolocation.getCurrentPosition(
+      position => {
+        const { latitude, longitude } = position.coords
+        setCoordinates({ latitude, longitude })
+        
+        // Use OpenStreetMap's Nominatim for reverse geocoding
+        fetchAddressFromNominatim(latitude, longitude)
+      },
+      error => {
+        setLoading(false)
+        Alert.alert('Error', 'Unable to get your location: ' + error.message)
+        console.log('Error getting location:', error)
+      },
+      { 
+        enableHighAccuracy: true, 
+        timeout: 15000, 
+        maximumAge: 10000 
+      }
+    )
+  }
+
+  // Fix Error 3 & 4: Add explicit type annotations for parameters
+  const fetchAddressFromNominatim = async (latitude: number, longitude: number) => {
+    try {
+      // Add a small delay to avoid rate limiting (Nominatim has a 1 request per second limit)
+      await new Promise(resolve => setTimeout(resolve, 1000))
+      
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1`,
+        {
+          headers: {
+            // Required by Nominatim's usage policy
+            'User-Agent': 'EmergencyApp/1.0'
+          }
+        }
+      )
+      
+      const data = await response.json()
+      
+      if (data && data.display_name) {
+        setLocation(data.display_name)
+      } else {
+        // Fallback to coordinates if address lookup fails
+        setLocation(`${latitude.toFixed(6)}, ${longitude.toFixed(6)}`)
+      }
+    } catch (error) {
+      console.log('Error fetching address:', error)
+      // Fallback to coordinates if address lookup fails
+      setLocation(`${latitude.toFixed(6)}, ${longitude.toFixed(6)}`)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Initialize location on component mount
+  useEffect(() => {
+    requestLocationPermission()
+  }, [])
 
   return (
     <View style={styles.container}>
@@ -38,13 +135,27 @@ const EmergencyScreen = () => {
             <Icon name="location-on" size={24} color="#e74c3c" />
             <TextInput
               style={styles.locationInput}
-              value={location}
+              value={loading ? "Getting location..." : location}
               onChangeText={setLocation}
             />
-            <TouchableOpacity style={styles.refreshButton}>
-              <Icon name="my-location" size={20} color="#e74c3c" />
+            <TouchableOpacity 
+              style={styles.refreshButton}
+              onPress={requestLocationPermission}
+              disabled={loading}
+            >
+              <Icon 
+                name={loading ? "sync" : "my-location"} 
+                size={20} 
+                color="#e74c3c" 
+              />
             </TouchableOpacity>
           </View>
+          {/* Fix Error 5 & 6: Add null checks before using toFixed */}
+          {coordinates.latitude !== null && coordinates.longitude !== null && (
+            <Text style={styles.coordinatesText}>
+              Coordinates: {coordinates.latitude.toFixed(6)}, {coordinates.longitude.toFixed(6)}
+            </Text>
+          )}
         </View>
 
         {/* Emergency Type */}
@@ -202,6 +313,12 @@ const styles = StyleSheet.create({
   },
   refreshButton: {
     padding: 5,
+  },
+  coordinatesText: {
+    fontSize: 12,
+    color: '#7f8c8d',
+    marginTop: 5,
+    marginLeft: 10,
   },
   emergencyTypesContainer: {
     flexDirection: 'row',

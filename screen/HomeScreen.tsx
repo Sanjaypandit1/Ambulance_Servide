@@ -6,7 +6,7 @@ const HomeScreen = () => {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>MediRush</Text>
+        <Text style={styles.headerTitle}>Emergency Service</Text>
         <TouchableOpacity style={styles.notificationButton}>
           <Icon name="notifications" size={24} color="#e74c3c" />
         </TouchableOpacity>
@@ -80,27 +80,7 @@ const HomeScreen = () => {
           </View>
         </View>
 
-        {/* Health Tips */}
-        <Text style={styles.sectionTitle}>Health Tips</Text>
-        <View style={styles.tipsContainer}>
-          <View style={styles.tipCard}>
-            <Image 
-              source={{ uri: 'https://via.placeholder.com/100' }} 
-              style={styles.tipImage} 
-            />
-            <Text style={styles.tipTitle}>CPR Basics</Text>
-            <Text style={styles.tipDescription}>Learn the fundamentals of CPR that could save a life.</Text>
-          </View>
-          
-          <View style={styles.tipCard}>
-            <Image 
-              source={{ uri: 'https://via.placeholder.com/100' }} 
-              style={styles.tipImage} 
-            />
-            <Text style={styles.tipTitle}>Emergency Kit</Text>
-            <Text style={styles.tipDescription}>Essential items to keep in your emergency kit.</Text>
-          </View>
-        </View>
+        
       </ScrollView>
     </View>
   )
