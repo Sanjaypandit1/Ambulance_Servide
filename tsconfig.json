@@ -1,3 +1,9 @@
 {
-  "extends": "@react-native/typescript-config/tsconfig.json"
+
+  "compilerOptions": {
+    "strict": true,
+    "skipLibCheck": true,
+    // other options...
+  },
+    "extends": "@react-native/typescript-config/tsconfig.json"
 }
