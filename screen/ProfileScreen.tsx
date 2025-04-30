@@ -1,10 +1,11 @@
 "use client"
 
-import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Alert, Modal, TextInput, Linking } from "react-native"
+import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Alert, Modal, TextInput, Linking, Image } from "react-native"
 import { useState, useEffect } from "react"
 import Icon from "react-native-vector-icons/MaterialIcons"
 import { useAuth } from "../context/AuthContext"
 import AsyncStorage from "@react-native-async-storage/async-storage"
+import * as ImagePicker from 'react-native-image-picker'
 
 // Define interface for emergency contact
 interface EmergencyContact {
@@ -23,9 +24,31 @@ const ProfileScreen = () => {
   const [newContactRelation, setNewContactRelation] = useState('')
   // Fix: Define proper type for emergencyContacts
   const [emergencyContacts, setEmergencyContacts] = useState<EmergencyContact[]>([])
+  const [profileImage, setProfileImage] = useState<string | null>(null)
 
   // Add this console log to debug
   console.log("Profile data:", { userType, userProfile, userEmail: user?.email })
+
+  // Load profile image from storage
+  const loadProfileImage = async () => {
+    try {
+      const storedImage = await AsyncStorage.getItem('profileImage')
+      if (storedImage) {
+        setProfileImage(storedImage)
+      }
+    } catch (error) {
+      console.log('Error loading profile image:', error)
+    }
+  }
+
+  // Save profile image to storage
+  const saveProfileImage = async (imageUri: string) => {
+    try {
+      await AsyncStorage.setItem('profileImage', imageUri)
+    } catch (error) {
+      console.log('Error saving profile image:', error)
+    }
+  }
 
   // Load emergency contacts from storage
   const loadEmergencyContacts = async () => {
@@ -142,9 +165,81 @@ const ProfileScreen = () => {
     return "U"
   }
 
-  // Load emergency contacts on component mount
+  // Handle selecting image from gallery
+  const selectImageFromGallery = () => {
+    const options = {
+      title: 'Select Profile Photo',
+      storageOptions: {
+        skipBackup: true,
+        path: 'images',
+      },
+      mediaType: 'photo' as const,
+    }
+
+    ImagePicker.launchImageLibrary(options, (response) => {
+      if (response.didCancel) {
+        console.log('User cancelled image picker')
+      } else if (response.errorCode) {
+        console.log('ImagePicker Error: ', response.errorMessage)
+        Alert.alert('Error', 'There was an error selecting the image')
+      } else if (response.assets && response.assets.length > 0) {
+        const source = response.assets[0].uri
+        if (source) {
+          setProfileImage(source)
+          saveProfileImage(source)
+        }
+      }
+    })
+  }
+
+  // Handle taking a photo with camera
+  const takePhoto = () => {
+    const options = {
+      title: 'Take Profile Photo',
+      storageOptions: {
+        skipBackup: true,
+        path: 'images',
+      },
+      mediaType: 'photo' as const,
+    }
+
+    ImagePicker.launchCamera(options, (response) => {
+      if (response.didCancel) {
+        console.log('User cancelled camera')
+      } else if (response.errorCode) {
+        console.log('Camera Error: ', response.errorMessage)
+        Alert.alert('Error', 'There was an error taking the photo')
+      } else if (response.assets && response.assets.length > 0) {
+        const source = response.assets[0].uri
+        if (source) {
+          setProfileImage(source)
+          saveProfileImage(source)
+        }
+      }
+    })
+  }
+
+  // Show image selection options
+  const showImageOptions = () => {
+    Alert.alert(
+      'Profile Photo',
+      'Choose an option',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Take Photo', onPress: takePhoto },
+        { text: 'Choose from Gallery', onPress: selectImageFromGallery },
+        ...(profileImage ? [{ text: 'Remove Photo', onPress: () => {
+          setProfileImage(null)
+          AsyncStorage.removeItem('profileImage')
+        }}] : [])
+      ]
+    )
+  }
+
+  // Load emergency contacts and profile image on component mount
   useEffect(() => {
     loadEmergencyContacts()
+    loadProfileImage()
   }, [])
 
   return (
@@ -156,9 +251,23 @@ const ProfileScreen = () => {
       <ScrollView style={styles.scrollView}>
         {/* Profile Info */}
         <View style={styles.profileInfoContainer}>
-          <View style={styles.avatarContainer}>
-            <Text style={styles.avatarText}>{getInitials()}</Text>
-          </View>
+          <TouchableOpacity onPress={showImageOptions}>
+            {profileImage ? (
+              <View style={styles.avatarContainer}>
+                <Image source={{ uri: profileImage }} style={styles.avatarImage} />
+                <View style={styles.editIconContainer}>
+                  <Icon name="edit" size={16} color="#fff" />
+                </View>
+              </View>
+            ) : (
+              <View style={styles.avatarContainer}>
+                <Text style={styles.avatarText}>{getInitials()}</Text>
+                <View style={styles.editIconContainer}>
+                  <Icon name="edit" size={16} color="#fff" />
+                </View>
+              </View>
+            )}
+          </TouchableOpacity>
           <Text style={styles.profileName}>{userProfile?.name || "User"}</Text>
           <Text style={styles.profileEmail}>{user?.email}</Text>
           <View style={styles.accountTypeContainer}>
@@ -392,11 +501,30 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 15,
+    position: "relative",
+  },
+  avatarImage: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
   },
   avatarText: {
     color: "#fff",
     fontSize: 30,
     fontWeight: "bold",
+  },
+  editIconContainer: {
+    position: "absolute",
+    bottom: 0,
+    right: 0,
+    backgroundColor: "#e74c3c",
+    borderRadius: 12,
+    width: 24,
+    height: 24,
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 2,
+    borderColor: "#fff",
   },
   profileName: {
     fontSize: 20,

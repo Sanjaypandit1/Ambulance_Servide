@@ -1,8 +1,9 @@
-import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Image } from 'react-native'
+import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Image, Modal, FlatList, Alert } from 'react-native'
 import React, { useState, useEffect } from 'react'
 import Icon from 'react-native-vector-icons/MaterialIcons'
 import { useNavigation, useFocusEffect, NavigationProp } from '@react-navigation/native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import { Linking } from 'react-native'
 
 // Define types for your emergency data
 type EmergencyData = {
@@ -14,17 +15,28 @@ type EmergencyData = {
   status?: 'In Progress' | 'Completed' | 'Cancelled';
 }
 
+// Define emergency contact type
+interface EmergencyContact {
+  id: string;
+  name: string;
+  number: string;
+  relation: string;
+}
+
 // Define your root stack param list
 type RootStackParamList = {
   Emergency: undefined;
   Track: { emergencyData: EmergencyData };
   Home: undefined;
+  Profile: undefined;
 };
 
 const HomeScreen = () => {
   const navigation = useNavigation<NavigationProp<RootStackParamList>>()
   const [recentActivities, setRecentActivities] = useState<EmergencyData[]>([])
   const [currentEmergency, setCurrentEmergency] = useState<EmergencyData | null>(null)
+  const [emergencyContacts, setEmergencyContacts] = useState<EmergencyContact[]>([])
+  const [contactsModalVisible, setContactsModalVisible] = useState(false)
 
   // Format timestamp to readable time
   const formatTime = (timestamp: number): string => {
@@ -68,6 +80,48 @@ const HomeScreen = () => {
     }
   }
 
+  // Navigate to profile screen
+  const navigateToProfile = () => {
+    navigation.navigate('Profile')
+  }
+
+  // Load emergency contacts
+  const loadEmergencyContacts = async () => {
+    try {
+      const storedContacts = await AsyncStorage.getItem('emergencyContacts')
+      if (storedContacts) {
+        setEmergencyContacts(JSON.parse(storedContacts))
+      }
+    } catch (error) {
+      console.log('Error loading emergency contacts:', error)
+    }
+  }
+
+  // Make a phone call
+ // Make a phone call
+const makePhoneCall = (phoneNumber: string) => {
+  const cleanedNumber = phoneNumber.replace(/[^\d+]/g, '')
+  
+  Linking.canOpenURL(`tel:${cleanedNumber}`)
+    .then(supported => {
+      if (!supported) {
+        Alert.alert('Error', 'Phone calls are not supported on this device')
+        return
+      }
+      return Linking.openURL(`tel:${cleanedNumber}`)
+    })
+    .catch(error => {
+      Alert.alert('Error', 'An error occurred while trying to make the call')
+      console.log('Error making phone call:', error)
+    })
+}
+
+  // Show emergency contacts modal
+  const showEmergencyContacts = () => {
+    loadEmergencyContacts()
+    setContactsModalVisible(true)
+  }
+
   // Load recent activities and current emergency
   useFocusEffect(
     React.useCallback(() => {
@@ -86,6 +140,9 @@ const HomeScreen = () => {
           } else {
             setCurrentEmergency(null)
           }
+
+          // Load emergency contacts
+          loadEmergencyContacts()
         } catch (error) {
           console.log('Error loading data:', error)
         }
@@ -95,7 +152,29 @@ const HomeScreen = () => {
     }, [])
   )
 
-
+  // Render emergency contact item
+  const renderContactItem = ({ item }: { item: EmergencyContact }) => (
+    <TouchableOpacity 
+      style={styles.modalContactItem}
+      onPress={() => makePhoneCall(item.number)}
+    >
+      <View style={styles.contactIconContainer}>
+        <Icon name="person" size={20} color="#fff" />
+      </View>
+      <View style={styles.contactInfo}>
+        <Text style={styles.contactName}>{item.name}</Text>
+        <Text style={styles.contactRelation}>
+          {item.relation} • {item.number}
+        </Text>
+      </View>
+      <TouchableOpacity 
+        style={styles.callButton}
+        onPress={() => makePhoneCall(item.number)}
+      >
+        <Icon name="call" size={20} color="#e74c3c" />
+      </TouchableOpacity>
+    </TouchableOpacity>
+  )
 
   return (
     <View style={styles.container}>
@@ -158,7 +237,10 @@ const HomeScreen = () => {
             <Text style={styles.actionText}>First Aid</Text>
           </TouchableOpacity>
           
-          <TouchableOpacity style={styles.actionButton}>
+          <TouchableOpacity 
+            style={styles.actionButton}
+            onPress={showEmergencyContacts}
+          >
             <View style={styles.actionIconContainer}>
               <Icon name="people" size={24} color="#e74c3c" />
             </View>
@@ -229,6 +311,51 @@ const HomeScreen = () => {
           )}
         </View>
       </ScrollView>
+
+      {/* Emergency Contacts Modal */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={contactsModalVisible}
+        onRequestClose={() => setContactsModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Emergency Contacts</Text>
+              <TouchableOpacity onPress={() => setContactsModalVisible(false)}>
+                <Icon name="close" size={24} color="#2c3e50" />
+              </TouchableOpacity>
+            </View>
+            
+            <View style={styles.modalBody}>
+              {emergencyContacts.length > 0 ? (
+                <FlatList
+                  data={emergencyContacts}
+                  renderItem={renderContactItem}
+                  keyExtractor={item => item.id}
+                  contentContainerStyle={styles.contactsList}
+                />
+              ) : (
+                <View style={styles.emptyContactsContainer}>
+                  <Icon name="people" size={40} color="#e0e0e0" />
+                  <Text style={styles.emptyStateText}>No emergency contacts</Text>
+                  <Text style={styles.emptyStateSubtext}>Add emergency contacts in your profile</Text>
+                  <TouchableOpacity 
+                    style={styles.addContactsButton}
+                    onPress={() => {
+                      setContactsModalVisible(false)
+                      navigateToProfile()
+                    }}
+                  >
+                    <Text style={styles.addContactsButtonText}>Go to Profile</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   )
 }
@@ -411,5 +538,91 @@ const styles = StyleSheet.create({
     color: '#7f8c8d',
     textAlign: 'center',
     marginTop: 5,
+  },
+  // Modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    width: '85%',
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    overflow: 'hidden',
+    elevation: 5,
+    maxHeight: '80%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f2f6',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#2c3e50',
+  },
+  modalBody: {
+    padding: 15,
+    maxHeight: '80%',
+  },
+  contactsList: {
+    paddingBottom: 20,
+  },
+  modalContactItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f2f6',
+  },
+  contactIconContainer: {
+    backgroundColor: '#e74c3c',
+    borderRadius: 20,
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  contactInfo: {
+    marginLeft: 15,
+    flex: 1,
+  },
+  contactName: {
+    fontWeight: 'bold',
+    fontSize: 14,
+  },
+  contactRelation: {
+    color: '#7f8c8d',
+    fontSize: 12,
+  },
+  callButton: {
+    backgroundColor: '#f8f9fa',
+    borderRadius: 20,
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  emptyContactsContainer: {
+    alignItems: 'center',
+    padding: 20,
+  },
+  addContactsButton: {
+    backgroundColor: '#e74c3c',
+    borderRadius: 5,
+    padding: 12,
+    alignItems: 'center',
+    marginTop: 20,
+    width: '100%',
+  },
+  addContactsButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
   },
 })
